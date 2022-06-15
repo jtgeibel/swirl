@@ -1,6 +1,6 @@
 use diesel::PgConnection;
 use std::error::Error;
-use std::ops::Deref;
+use std::ops::DerefMut;
 
 pub type DieselPooledConn<'a, T> = <T as BorrowedConnection<'a>>::Connection;
 
@@ -9,7 +9,7 @@ pub type DieselPooledConn<'a, T> = <T as BorrowedConnection<'a>>::Connection;
 /// This will eventually change to `type Connection<'a>` on [`DieselPool`]
 pub trait BorrowedConnection<'a> {
     /// The smart pointer returned by this connection pool.
-    type Connection: Deref<Target = PgConnection>;
+    type Connection: DerefMut<Target = PgConnection>;
 }
 
 /// A connection pool for Diesel database connections
@@ -40,16 +40,16 @@ pub trait DieselPoolObj {
     ///
     /// This function will heap allocate the connection. This allocation can
     /// be avoided by using [`Self::with_connection`]
-    fn get(&self) -> Result<Box<dyn Deref<Target = PgConnection> + '_>, Box<dyn Error>>;
+    fn get(&self) -> Result<Box<dyn DerefMut<Target = PgConnection> + '_>, Box<dyn Error>>;
 
     fn with_connection(
         &self,
-        f: &dyn Fn(&PgConnection) -> Result<(), Box<dyn Error>>,
+        f: &dyn Fn(&mut PgConnection) -> Result<(), Box<dyn Error>>,
     ) -> Result<(), Box<dyn Error>>;
 }
 
 impl<T: DieselPool> DieselPoolObj for T {
-    fn get(&self) -> Result<Box<dyn Deref<Target = PgConnection> + '_>, Box<dyn Error>> {
+    fn get(&self) -> Result<Box<dyn DerefMut<Target = PgConnection> + '_>, Box<dyn Error>> {
         DieselPool::get(self)
             .map(|v| Box::new(v) as _)
             .map_err(|v| Box::new(v) as _)
@@ -57,10 +57,9 @@ impl<T: DieselPool> DieselPoolObj for T {
 
     fn with_connection(
         &self,
-        f: &dyn Fn(&PgConnection) -> Result<(), Box<dyn Error>>,
+        f: &dyn Fn(&mut PgConnection) -> Result<(), Box<dyn Error>>,
     ) -> Result<(), Box<dyn Error>> {
-        let conn = DieselPool::get(self)?;
-        f(&conn)
+        f(&mut *DieselPool::get(self)?)
     }
 }
 
@@ -90,7 +89,7 @@ mod r2d2_impl {
     impl DieselPool for r2d2::Pool<ConnectionManager> {
         type Error = r2d2::PoolError;
 
-        fn get<'a>(&'a self) -> Result<DieselPooledConn<'a, Self>, Self::Error> {
+        fn get(&self) -> Result<DieselPooledConn<'_, Self>, Self::Error> {
             self.get()
         }
     }

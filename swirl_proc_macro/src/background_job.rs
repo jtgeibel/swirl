@@ -229,9 +229,6 @@ enum Arg {
 impl Arg {
     fn try_from(pat_type: syn::PatType) -> Result<Self, Diagnostic> {
         if let syn::Type::Reference(type_ref) = *pat_type.ty {
-            if let Some(mutable) = type_ref.mutability {
-                return Err(mutable.span.error("Unexpected `mut`"));
-            }
             let pat = pat_type.pat;
             let ty = type_ref.elem;
             if ConnectionArg::is_connection_arg(&ty) {

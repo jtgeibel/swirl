@@ -12,7 +12,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let database_url = dotenv::var("DATABASE_URL")?;
     println!("Enqueuing 100k jobs");
     let runner = Runner::builder(()).database_url(database_url).build();
-    enqueue_jobs(&*runner.connection_pool().get()?).unwrap();
+    enqueue_jobs(&mut *runner.connection_pool().get()?).unwrap();
     println!("Running jobs");
     let started = Instant::now();
 
@@ -25,7 +25,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn enqueue_jobs(conn: &PgConnection) -> Result<(), EnqueueError> {
+fn enqueue_jobs(conn: &mut PgConnection) -> Result<(), EnqueueError> {
     use diesel::sql_query;
     sql_query("TRUNCATE TABLE background_jobs;").execute(conn)?;
     for _ in 0..100_000 {

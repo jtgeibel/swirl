@@ -17,9 +17,9 @@ fn generated_jobs_serialize_all_arguments_except_first() -> Fallible<()> {
     }
 
     let runner = TestGuard::runner("a".to_string());
-    let conn = runner.connection_pool().get()?;
-    check_arg_equal_to_env("a".into()).enqueue(&conn)?;
-    check_arg_equal_to_env("b".into()).enqueue(&conn)?;
+    let conn = &mut runner.connection_pool().get()?;
+    check_arg_equal_to_env("a".into()).enqueue(conn)?;
+    check_arg_equal_to_env("b".into()).enqueue(conn)?;
 
     runner.run_all_pending_jobs()?;
     assert_eq!(Err(JobsFailed(1)), runner.check_for_failed_jobs());
@@ -38,9 +38,9 @@ fn jobs_with_args_but_no_env() -> Fallible<()> {
     }
 
     let runner = TestGuard::dummy_runner();
-    let conn = runner.connection_pool().get()?;
-    assert_foo("foo".into()).enqueue(&conn)?;
-    assert_foo("not foo".into()).enqueue(&conn)?;
+    let conn = &mut runner.connection_pool().get()?;
+    assert_foo("foo".into()).enqueue(conn)?;
+    assert_foo("not foo".into()).enqueue(conn)?;
 
     runner.run_all_pending_jobs()?;
     assert_eq!(Err(JobsFailed(1)), runner.check_for_failed_jobs());
@@ -56,8 +56,8 @@ fn env_can_have_any_name() -> Fallible<()> {
     }
 
     let runner = TestGuard::runner(String::from("my environment"));
-    let conn = runner.connection_pool().get()?;
-    env_with_different_name().enqueue(&conn)?;
+    let conn = &mut runner.connection_pool().get()?;
+    env_with_different_name().enqueue(conn)?;
 
     runner.run_all_pending_jobs()?;
     runner.check_for_failed_jobs()?;
@@ -79,8 +79,8 @@ fn test_imports_only_used_in_job_body_are_not_warned_as_unused() -> Fallible<()>
     }
 
     let runner = TestGuard::dummy_runner();
-    let conn = runner.connection_pool().get()?;
-    uses_trait_import().enqueue(&conn)?;
+    let conn = &mut runner.connection_pool().get()?;
+    uses_trait_import().enqueue(conn)?;
 
     runner.run_all_pending_jobs()?;
     runner.check_for_failed_jobs()?;
@@ -105,10 +105,10 @@ fn jobs_can_take_a_connection_as_an_argument() -> Fallible<()> {
 
     #[swirl::background_job]
     fn takes_connection_pool(pool: &dyn DieselPoolObj) -> Result<(), swirl::PerformError> {
-        let conn1 = pool.get()?;
-        let conn2 = pool.get()?;
-        sql_query("SELECT 1").execute(&**conn1)?;
-        sql_query("SELECT 1").execute(&**conn2)?;
+        let conn1 = &mut **pool.get()?;
+        let conn2 = &mut **pool.get()?;
+        sql_query("SELECT 1").execute(conn1)?;
+        sql_query("SELECT 1").execute(conn2)?;
         Ok(())
     }
 
@@ -122,21 +122,21 @@ fn jobs_can_take_a_connection_as_an_argument() -> Fallible<()> {
     fn takes_fully_qualified_pool(
         pool: &dyn swirl::db::DieselPoolObj,
     ) -> Result<(), swirl::PerformError> {
-        let conn1 = pool.get()?;
-        let conn2 = pool.get()?;
-        sql_query("SELECT 1").execute(&**conn1)?;
-        sql_query("SELECT 1").execute(&**conn2)?;
+        let conn1 = &mut **pool.get()?;
+        let conn2 = &mut **pool.get()?;
+        sql_query("SELECT 1").execute(conn1)?;
+        sql_query("SELECT 1").execute(conn2)?;
         Ok(())
     }
 
     let runner = TestGuard::dummy_runner();
     {
-        let conn = runner.connection_pool().get()?;
-        takes_env_and_conn().enqueue(&conn)?;
-        takes_only_conn().enqueue(&conn)?;
-        takes_connection_pool().enqueue(&conn)?;
-        takes_fully_qualified_conn().enqueue(&conn)?;
-        takes_fully_qualified_pool().enqueue(&conn)?;
+        let conn = &mut runner.connection_pool().get()?;
+        takes_env_and_conn().enqueue(conn)?;
+        takes_only_conn().enqueue(conn)?;
+        takes_connection_pool().enqueue(conn)?;
+        takes_fully_qualified_conn().enqueue(conn)?;
+        takes_fully_qualified_pool().enqueue(conn)?;
     }
 
     runner.run_all_pending_jobs()?;

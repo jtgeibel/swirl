@@ -15,18 +15,18 @@ use crate::test_guard::TestGuard;
 fn run_all_pending_jobs_returns_when_all_jobs_enqueued() -> Fallible<()> {
     let barrier = Barrier::new(3);
     let runner = TestGuard::runner(barrier.clone());
-    let conn = runner.connection_pool().get()?;
-    barrier_job().enqueue(&conn)?;
-    barrier_job().enqueue(&conn)?;
+    let conn = &mut runner.connection_pool().get()?;
+    barrier_job().enqueue(conn)?;
+    barrier_job().enqueue(conn)?;
 
     runner.run_all_pending_jobs()?;
 
-    let queued_job_count = background_jobs::table.count().get_result(&conn);
+    let queued_job_count = background_jobs::table.count().get_result(conn);
     let unlocked_job_count = background_jobs::table
         .select(background_jobs::id)
         .for_update()
         .skip_locked()
-        .load::<i64>(&conn)
+        .load::<i64>(conn)
         .map(|v| v.len());
 
     assert_eq!(Ok(2), queued_job_count);
@@ -40,9 +40,9 @@ fn run_all_pending_jobs_returns_when_all_jobs_enqueued() -> Fallible<()> {
 fn check_for_failed_jobs_blocks_until_all_queued_jobs_are_finished() -> Fallible<()> {
     let barrier = Barrier::new(3);
     let runner = TestGuard::runner(barrier.clone());
-    let conn = runner.connection_pool().get()?;
-    barrier_job().enqueue(&conn)?;
-    barrier_job().enqueue(&conn)?;
+    let conn = &mut runner.connection_pool().get()?;
+    barrier_job().enqueue(conn)?;
+    barrier_job().enqueue(conn)?;
 
     runner.run_all_pending_jobs()?;
 
@@ -68,10 +68,10 @@ fn check_for_failed_jobs_blocks_until_all_queued_jobs_are_finished() -> Fallible
 #[test]
 fn check_for_failed_jobs_panics_if_jobs_failed() -> Fallible<()> {
     let runner = TestGuard::dummy_runner();
-    let conn = runner.connection_pool().get()?;
-    failure_job().enqueue(&conn)?;
-    failure_job().enqueue(&conn)?;
-    failure_job().enqueue(&conn)?;
+    let conn = &mut runner.connection_pool().get()?;
+    failure_job().enqueue(conn)?;
+    failure_job().enqueue(conn)?;
+    failure_job().enqueue(conn)?;
 
     runner.run_all_pending_jobs()?;
     assert_eq!(Err(JobsFailed(3)), runner.check_for_failed_jobs());
@@ -81,9 +81,9 @@ fn check_for_failed_jobs_panics_if_jobs_failed() -> Fallible<()> {
 #[test]
 fn panicking_jobs_are_caught_and_treated_as_failures() -> Fallible<()> {
     let runner = TestGuard::dummy_runner();
-    let conn = runner.connection_pool().get()?;
-    panic_job().enqueue(&conn)?;
-    failure_job().enqueue(&conn)?;
+    let conn = &mut runner.connection_pool().get()?;
+    panic_job().enqueue(conn)?;
+    failure_job().enqueue(conn)?;
 
     runner.run_all_pending_jobs()?;
     assert_eq!(Err(JobsFailed(2)), runner.check_for_failed_jobs());
@@ -99,9 +99,9 @@ fn run_all_pending_jobs_errs_if_jobs_dont_start_in_timeout() -> Fallible<()> {
         .thread_count(1)
         .job_start_timeout(Duration::from_millis(50))
         .build();
-    let conn = runner.connection_pool().get()?;
-    barrier_job().enqueue(&conn)?;
-    barrier_job().enqueue(&conn)?;
+    let conn = &mut runner.connection_pool().get()?;
+    barrier_job().enqueue(conn)?;
+    barrier_job().enqueue(conn)?;
 
     let run_result = runner.run_all_pending_jobs();
     assert_matches!(run_result, Err(swirl::FetchError::NoMessageReceived));
@@ -121,18 +121,18 @@ fn jobs_failing_to_load_doesnt_panic_threads() -> Fallible<()> {
         .build();
 
     {
-        let conn = runner.connection_pool().get()?;
-        failure_job().enqueue(&conn)?;
+        let conn = &mut runner.connection_pool().get()?;
+        failure_job().enqueue(conn)?;
         // Since jobs are loaded with `SELECT FOR UPDATE`, it will always fail in
         // read-only mode
-        diesel::sql_query("SET default_transaction_read_only = 't'").execute(&conn)?;
+        diesel::sql_query("SET default_transaction_read_only = 't'").execute(conn)?;
     }
 
     let run_result = runner.run_all_pending_jobs();
 
     {
-        let conn = runner.connection_pool().get()?;
-        diesel::sql_query("SET default_transaction_read_only = 'f'").execute(&conn)?;
+        let conn = &mut runner.connection_pool().get()?;
+        diesel::sql_query("SET default_transaction_read_only = 'f'").execute(conn)?;
     }
 
     assert_matches!(run_result, Err(swirl::FetchError::FailedLoadingJob(_)));

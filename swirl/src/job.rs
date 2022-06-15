@@ -18,7 +18,7 @@ pub trait Job: Serialize + DeserializeOwned {
     const JOB_TYPE: &'static str;
 
     /// Enqueue this job to be run at some point in the future.
-    fn enqueue(self, conn: &PgConnection) -> Result<(), EnqueueError> {
+    fn enqueue(self, conn: &mut PgConnection) -> Result<(), EnqueueError> {
         storage::enqueue_job(conn, self)
     }
 

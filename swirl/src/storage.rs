@@ -3,7 +3,6 @@ use diesel::pg::Pg;
 use diesel::prelude::*;
 use diesel::sql_types::{Bool, Integer, Interval};
 use diesel::{delete, insert_into, update};
-use serde_json;
 
 use crate::errors::EnqueueError;
 use crate::schema::background_jobs;
@@ -17,7 +16,7 @@ pub struct BackgroundJob {
 }
 
 /// Enqueues a job to be run as soon as possible.
-pub fn enqueue_job<T: Job>(conn: &PgConnection, job: T) -> Result<(), EnqueueError> {
+pub fn enqueue_job<T: Job>(conn: &mut PgConnection, job: T) -> Result<(), EnqueueError> {
     use crate::schema::background_jobs::dsl::*;
 
     let job_data = serde_json::to_value(job)?;
@@ -38,7 +37,7 @@ fn retriable() -> Box<dyn BoxableExpression<background_jobs::table, Pg, SqlType 
 
 /// Finds the next job that is unlocked, and ready to be retried. If a row is
 /// found, it will be locked.
-pub fn find_next_unlocked_job(conn: &PgConnection) -> QueryResult<BackgroundJob> {
+pub fn find_next_unlocked_job(conn: &mut PgConnection) -> QueryResult<BackgroundJob> {
     use crate::schema::background_jobs::dsl::*;
 
     background_jobs
@@ -51,7 +50,7 @@ pub fn find_next_unlocked_job(conn: &PgConnection) -> QueryResult<BackgroundJob>
 }
 
 /// The number of jobs that have failed at least once
-pub fn failed_job_count(conn: &PgConnection) -> QueryResult<i64> {
+pub fn failed_job_count(conn: &mut PgConnection) -> QueryResult<i64> {
     use crate::schema::background_jobs::dsl::*;
 
     background_jobs
@@ -61,7 +60,7 @@ pub fn failed_job_count(conn: &PgConnection) -> QueryResult<i64> {
 }
 
 /// Deletes a job that has successfully completed running
-pub fn delete_successful_job(conn: &PgConnection, job_id: i64) -> QueryResult<()> {
+pub fn delete_successful_job(conn: &mut PgConnection, job_id: i64) -> QueryResult<()> {
     use crate::schema::background_jobs::dsl::*;
 
     delete(background_jobs.find(job_id)).execute(conn)?;
@@ -72,7 +71,7 @@ pub fn delete_successful_job(conn: &PgConnection, job_id: i64) -> QueryResult<()
 ///
 /// Ignores any database errors that may have occurred. If the DB has gone away,
 /// we assume that just trying again with a new connection will succeed.
-pub fn update_failed_job(conn: &PgConnection, job_id: i64) {
+pub fn update_failed_job(conn: &mut PgConnection, job_id: i64) {
     use crate::schema::background_jobs::dsl::*;
 
     let _ = update(background_jobs.find(job_id))

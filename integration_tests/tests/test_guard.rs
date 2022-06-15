@@ -86,9 +86,9 @@ impl<'a, Env> DerefMut for TestGuard<'a, Env> {
 
 impl<'a, Env> Drop for TestGuard<'a, Env> {
     fn drop(&mut self) {
-        let conn = self.runner.connection_pool().get().unwrap();
+        let conn = &mut self.runner.connection_pool().get().unwrap();
         ::diesel::sql_query("TRUNCATE TABLE background_jobs")
-            .execute(&conn)
+            .execute(conn)
             .unwrap_from_drop();
     }
 }

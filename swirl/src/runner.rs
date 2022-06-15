@@ -229,7 +229,7 @@ where
         // The connection may not be `Send` so we need to clone the pool instead
         let pool = self.connection_pool.clone();
         self.thread_pool.execute(move || {
-            let conn = match pool.get() {
+            let conn = &mut *match pool.get() {
                 Ok(conn) => conn,
                 Err(e) => {
                     sender.send(Event::FailedToAcquireConnection(e));
@@ -237,8 +237,8 @@ where
                 }
             };
 
-            let job_run_result = conn.transaction::<_, diesel::result::Error, _>(|| {
-                let job = match storage::find_next_unlocked_job(&conn).optional() {
+            let job_run_result = conn.transaction::<_, diesel::result::Error, _>(|conn| {
+                let job = match storage::find_next_unlocked_job(conn).optional() {
                     Ok(Some(j)) => {
                         sender.send(Event::Working);
                         j
@@ -259,10 +259,10 @@ where
                     .and_then(|r| r);
 
                 match result {
-                    Ok(_) => storage::delete_successful_job(&conn, job_id)?,
+                    Ok(_) => storage::delete_successful_job(conn, job_id)?,
                     Err(e) => {
                         eprintln!("Job {} failed to run: {}", job_id, e);
-                        storage::update_failed_job(&conn, job_id);
+                        storage::update_failed_job(conn, job_id);
                     }
                 }
                 Ok(())
@@ -292,7 +292,7 @@ where
     /// will be returned.
     pub fn check_for_failed_jobs(&self) -> Result<(), FailedJobsError> {
         self.wait_for_jobs()?;
-        let failed_jobs = storage::failed_job_count(&*self.connection()?)?;
+        let failed_jobs = storage::failed_job_count(&mut *self.connection()?)?;
         if failed_jobs == 0 {
             Ok(())
         } else {
@@ -380,7 +380,7 @@ mod tests {
 
         let remaining_jobs = background_jobs
             .count()
-            .get_result(&*runner.connection().unwrap());
+            .get_result(&mut *runner.connection().unwrap());
         assert_eq!(Ok(0), remaining_jobs);
     }
 
@@ -399,7 +399,7 @@ mod tests {
             Err("nope".into())
         });
 
-        let conn = runner.connection().unwrap();
+        let conn = &mut runner.connection().unwrap();
         // Wait for the first thread to acquire the lock
         barrier2.0.wait();
         // We are intentionally not using `get_single_job` here.
@@ -411,7 +411,7 @@ mod tests {
             .select(id)
             .filter(retries.eq(0))
             .for_update()
-            .load::<i64>(&*conn)
+            .load::<i64>(conn)
             .unwrap();
         assert_eq!(0, available_jobs.len());
 
@@ -419,7 +419,7 @@ mod tests {
         let total_jobs_including_failed = background_jobs
             .select(id)
             .for_update()
-            .load::<i64>(&*conn)
+            .load::<i64>(conn)
             .unwrap();
         assert_eq!(1, total_jobs_including_failed.len());
 
@@ -439,7 +439,7 @@ mod tests {
             .find(job_id)
             .select(retries)
             .for_update()
-            .first::<i32>(&*runner.connection().unwrap())
+            .first::<i32>(&mut *runner.connection().unwrap())
             .unwrap();
         assert_eq!(1, tries);
     }
@@ -465,7 +465,7 @@ mod tests {
     impl<'a> Drop for TestGuard<'a> {
         fn drop(&mut self) {
             ::diesel::sql_query("TRUNCATE TABLE background_jobs")
-                .execute(&*runner().connection().unwrap())
+                .execute(&mut *runner().connection().unwrap())
                 .unwrap();
         }
     }
@@ -486,7 +486,7 @@ mod tests {
         ::diesel::insert_into(background_jobs)
             .values((job_type.eq("Foo"), data.eq(serde_json::json!(null))))
             .returning((id, job_type, data))
-            .get_result(&*runner.connection().unwrap())
+            .get_result(&mut *runner.connection().unwrap())
             .unwrap()
     }
 }

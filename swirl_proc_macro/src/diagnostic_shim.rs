@@ -1,3 +1,5 @@
+use std::fmt::Write;
+
 use proc_macro2::{Span, TokenStream};
 
 pub trait DiagnosticShim {
@@ -37,7 +39,7 @@ impl Diagnostic {
     }
 
     pub(crate) fn help<T: Into<String>>(mut self, msg: T) -> Self {
-        self.message += &format!("\nhelp: {}", msg.into());
+        let _ = write!(self.message, "\nhelp: {}", msg.into());
         self
     }
 }

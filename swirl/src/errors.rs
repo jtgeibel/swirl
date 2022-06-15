@@ -6,16 +6,13 @@ use crate::db::DieselPool;
 
 /// An error occurred queueing the job
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum EnqueueError {
     /// An error occurred serializing the job
     SerializationError(serde_json::error::Error),
 
     /// An error occurred inserting the job into the database
     DatabaseError(DieselError),
-
-    #[doc(hidden)]
-    /// Match on `_` instead, more variants may be added in the future
-    __NonExhaustive,
 }
 
 impl From<serde_json::error::Error> for EnqueueError {
@@ -35,7 +32,6 @@ impl fmt::Display for EnqueueError {
         match self {
             EnqueueError::SerializationError(e) => e.fmt(f),
             EnqueueError::DatabaseError(e) => e.fmt(f),
-            EnqueueError::__NonExhaustive => unreachable!(),
         }
     }
 }
@@ -45,7 +41,6 @@ impl Error for EnqueueError {
         match self {
             EnqueueError::SerializationError(e) => Some(e),
             EnqueueError::DatabaseError(e) => Some(e),
-            EnqueueError::__NonExhaustive => unreachable!(),
         }
     }
 }

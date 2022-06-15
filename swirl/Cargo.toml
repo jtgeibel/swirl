@@ -8,7 +8,7 @@ license = "MIT OR Apache-2.0"
 
 [dependencies]
 swirl_proc_macro = { path = "../swirl_proc_macro" }
-diesel = { version = "1.0.0", features = ["postgres", "serde_json"] }
+diesel = { version = "2.0.0-rc.0", features = ["postgres", "serde_json"] }
 threadpool = "1.7"
 serde_json = "1.0.0"
 serde = "1.0.0"
